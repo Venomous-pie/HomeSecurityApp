@@ -7,6 +7,23 @@
     <uses-permission android:name="android.permission.MANAGE_ACCOUNTS" />
 
     <uses-permission android:name="android.permission.USE_CREDENTIALS" />
+    
+    <!-- Camera and microphone permissions for monitoring -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    
+    <!-- Network permissions for streaming -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    
+    <!-- Foreground service for camera streaming -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -60,6 +77,24 @@
             android:theme="@style/Theme.SmartHomeSecurityControlHub" />
             
         <activity
+            android:name=".ui.monitoring.DeviceSetupActivity"
+            android:exported="false"
+            android:label="Device Setup"
+            android:theme="@style/Theme.SmartHomeSecurityControlHub" />
+            
+        <activity
+            android:name=".ui.monitoring.CameraStreamActivity"
+            android:exported="false"
+            android:label="Camera Stream"
+            android:theme="@style/Theme.SmartHomeSecurityControlHub" />
+            
+        <activity
+            android:name=".ui.monitoring.MonitorViewActivity"
+            android:exported="false"
+            android:label="Monitor View"
+            android:theme="@style/Theme.SmartHomeSecurityControlHub" />
+            
+        <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false"
             android:label="Settings"
@@ -75,6 +110,12 @@
                 android:name="android.accounts.AccountAuthenticator"
                 android:resource="@xml/authenticator" />
         </service>
+        
+        <!-- Camera streaming service -->
+        <service
+            android:name=".service.CameraStreamingService"
+            android:foregroundServiceType="camera|microphone"
+            android:exported="false" />
 
     </application>
 

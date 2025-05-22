@@ -6,15 +6,30 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.DeviceHub
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.BottomAppBar
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,27 +49,42 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.smarthomesecuritycontrolhub.repository.DeviceRepository
 import com.example.smarthomesecuritycontrolhub.ui.camera.CameraSetupActivity
+import com.example.smarthomesecuritycontrolhub.ui.monitoring.DeviceSetupActivity
 import com.example.smarthomesecuritycontrolhub.ui.monitoring.MonitoringActivity
 import com.example.smarthomesecuritycontrolhub.ui.settings.SettingsActivity
 import com.example.smarthomesecuritycontrolhub.ui.theme.SmartHomeSecurityControlHubTheme
 
 class DashboardActivity : ComponentActivity() {
+    
+    private lateinit var deviceRepository: DeviceRepository
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize device repository
+        deviceRepository = DeviceRepository(this)
+        
         setContent {
             SmartHomeSecurityControlHubTheme {
                 DashboardScreen(
-                    onCameraSetupSelected = { 
-                        // Navigate to camera setup screen
-                        val intent = Intent(this, CameraSetupActivity::class.java)
+                    onDeviceSetupSelected = { 
+                        // Navigate to device setup screen
+                        val intent = Intent(this, DeviceSetupActivity::class.java)
                         startActivity(intent)
                     },
                     onMonitoringSelected = {
                         // Navigate to monitoring screen
                         val intent = Intent(this, MonitoringActivity::class.java)
+                        startActivity(intent)
+                    },
+                    onCameraSetupSelected = { 
+                        // Navigate to camera setup screen
+                        val intent = Intent(this, CameraSetupActivity::class.java)
                         startActivity(intent)
                     },
                     onHomeSelected = {
@@ -76,6 +106,7 @@ class DashboardActivity : ComponentActivity() {
 fun DashboardScreen(
     onCameraSetupSelected: () -> Unit,
     onMonitoringSelected: () -> Unit,
+    onDeviceSetupSelected: () -> Unit,
     onHomeSelected: () -> Unit,
     onSettingsSelected: () -> Unit
 ) {
@@ -99,6 +130,13 @@ fun DashboardScreen(
                             onClick = {
                                 showDropdown = false
                                 onCameraSetupSelected()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Device Setup") },
+                            onClick = {
+                                showDropdown = false
+                                onDeviceSetupSelected()
                             }
                         )
                         DropdownMenuItem(
@@ -141,16 +179,108 @@ fun DashboardScreen(
                 .padding(paddingValues),
             color = MaterialTheme.colorScheme.background
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Welcome to the Dashboard",
+                    text = "Smart Home Security Hub",
                     style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center
                 )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Dashboard grid with features
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    val dashboardItems = listOf(
+                        DashboardItem(
+                            title = "Device Setup",
+                            icon = Icons.Default.DeviceHub,
+                            description = "Configure camera and monitor devices",
+                            onClick = onDeviceSetupSelected
+                        ),
+                        DashboardItem(
+                            title = "Monitoring",
+                            icon = Icons.Default.Videocam,
+                            description = "View connected cameras and streams",
+                            onClick = onMonitoringSelected
+                        ),
+                        DashboardItem(
+                            title = "Camera Setup",
+                            icon = Icons.Default.CameraAlt,
+                            description = "Configure camera settings",
+                            onClick = onCameraSetupSelected
+                        ),
+                        DashboardItem(
+                            title = "Settings",
+                            icon = Icons.Default.Settings,
+                            description = "App settings and preferences",
+                            onClick = onSettingsSelected
+                        )
+                    )
+                    
+                    items(dashboardItems) { item ->
+                        DashboardItemCard(item)
+                    }
+                }
             }
+        }
+    }
+} 
+
+data class DashboardItem(
+    val title: String,
+    val icon: ImageVector,
+    val description: String,
+    val onClick: () -> Unit
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DashboardItemCard(item: DashboardItem) {
+    Card(
+        onClick = item.onClick,
+        modifier = Modifier
+            .padding(8.dp)
+            .fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp
+        )
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .padding(16.dp)
+                .height(120.dp)
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.titleMedium
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = item.description,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
         }
     }
 } 
