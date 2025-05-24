@@ -8,9 +8,11 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +62,20 @@ class CameraStreamActivity : ComponentActivity() {
     private var cameraStreamingService: CameraStreamingService? = null
     private var isServiceBound = false
     
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.all { it.value }) {
+            startCameraStreaming()
+        } else {
+            Toast.makeText(
+                this,
+                "Camera and microphone permissions are required for streaming",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+    
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as CameraStreamingService.LocalBinder
@@ -75,6 +91,7 @@ class CameraStreamActivity : ComponentActivity() {
     }
     
     private var isStreaming by mutableStateOf(false)
+    private var errorMessage by mutableStateOf<String?>(null)
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,15 +101,22 @@ class CameraStreamActivity : ComponentActivity() {
         
         // Start and bind to camera streaming service
         val serviceIntent = Intent(this, CameraStreamingService::class.java)
-        startService(serviceIntent)
-        bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+        try {
+            startService(serviceIntent)
+            bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start/bind camera service: ${e.message}", e)
+            errorMessage = "Failed to initialize camera service"
+        }
         
         setContent {
             SmartHomeSecurityControlHubTheme {
                 CameraStreamScreen(
                     isStreaming = isStreaming,
+                    errorMessage = errorMessage,
                     onStartStream = { startCameraStreaming() },
                     onStopStream = { stopCameraStreaming() },
+                    onErrorDismiss = { errorMessage = null },
                     onBackPressed = { 
                         stopCameraStreaming()
                         finish() 
@@ -115,31 +139,37 @@ class CameraStreamActivity : ComponentActivity() {
     }
     
     private fun startCameraStreaming() {
-        if (checkCameraAndMicPermissions()) {
-            cameraStreamingService?.startStreaming()
-            updateStreamingStatus()
-            
-            // Update the device status in repository
-            val device = deviceRepository.getCurrentDevice()
-            device.isOnline = true
-            deviceRepository.saveCurrentDevice(device)
-        } else {
-            Toast.makeText(
-                this,
-                "Camera and microphone permissions are required",
-                Toast.LENGTH_LONG
-            ).show()
+        try {
+            if (checkCameraAndMicPermissions()) {
+                cameraStreamingService?.startStreaming()
+                updateStreamingStatus()
+                
+                // Update the device status in repository
+                val device = deviceRepository.getCurrentDevice()
+                device.isOnline = true
+                deviceRepository.saveCurrentDevice(device)
+            } else {
+                requestCameraAndMicPermissions()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start streaming: ${e.message}", e)
+            errorMessage = "Failed to start camera streaming: ${e.message}"
         }
     }
     
     private fun stopCameraStreaming() {
-        cameraStreamingService?.stopStreaming()
-        updateStreamingStatus()
-        
-        // Update the device status in repository
-        val device = deviceRepository.getCurrentDevice()
-        device.isOnline = false
-        deviceRepository.saveCurrentDevice(device)
+        try {
+            cameraStreamingService?.stopStreaming()
+            updateStreamingStatus()
+            
+            // Update the device status in repository
+            val device = deviceRepository.getCurrentDevice()
+            device.isOnline = false
+            deviceRepository.saveCurrentDevice(device)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop streaming: ${e.message}", e)
+            errorMessage = "Failed to stop camera streaming: ${e.message}"
+        }
     }
     
     private fun updateStreamingStatus() {
@@ -156,92 +186,90 @@ class CameraStreamActivity : ComponentActivity() {
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
     }
+    
+    private fun requestCameraAndMicPermissions() {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.RECORD_AUDIO
+            )
+        )
+    }
+
+    companion object {
+        private const val TAG = "CameraStreamActivity"
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraStreamScreen(
     isStreaming: Boolean,
+    errorMessage: String?,
     onStartStream: () -> Unit,
     onStopStream: () -> Unit,
+    onErrorDismiss: () -> Unit,
     onBackPressed: () -> Unit
 ) {
-    // Handle lifecycle events
-    val lifecycleOwner = LocalLifecycleOwner.current
-    
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                // Optional: Consider stopping streaming when app goes to background
-            }
-        }
-        
-        lifecycleOwner.lifecycle.addObserver(observer)
-        
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-    
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Camera Streaming") },
                 navigationIcon = {
                     IconButton(onClick = onBackPressed) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* Open settings */ }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Default.ArrowBack, "Back")
                     }
                 }
             )
         }
-    ) { paddingValues ->
-        Surface(
+    ) { padding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            color = MaterialTheme.colorScheme.background
+                .padding(padding)
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Camera preview placeholder
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(240.dp)
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.CameraAlt,
-                        contentDescription = "Camera Preview",
-                        modifier = Modifier.fillMaxSize(0.5f),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                    )
-                    
-                    // Only show preview when streaming
-                    if (!isStreaming) {
-                        Text(
-                            "Camera preview will appear here when streaming",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                // Error message
+                errorMessage?.let { error ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = error,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = onErrorDismiss) {
+                                Icon(
+                                    Icons.Default.CameraAlt,
+                                    contentDescription = "Dismiss",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                
-                // Streaming status
+
+                // Status and controls
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         "Camera Streaming",

@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.smarthomesecuritycontrolhub"
-        minSdk = 21
+        minSdk = 23
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -75,8 +75,16 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
     
-    // Firebase for real-time signaling
-    implementation(platform("com.google.firebase:firebase-bom:32.8.0"))
+    // Import the Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:33.14.0"))
+
+    // Add Firebase Analytics (When using the BoM, don't specify versions in Firebase dependencies)
+    implementation("com.google.firebase:firebase-analytics")
+
+    // Existing Firebase dependencies
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
+
+    // Add the dependencies for any other desired Firebase products
+    // https://firebase.google.com/docs/android/setup#available-libraries
 }

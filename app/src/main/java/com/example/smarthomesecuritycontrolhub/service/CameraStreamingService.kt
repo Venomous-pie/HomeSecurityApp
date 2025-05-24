@@ -77,6 +77,12 @@ class CameraStreamingService : Service(), SignalingClient.SignalingClientListene
         // Initialize device repository
         deviceRepository = DeviceRepository(this)
         
+        // Create notification channel for Android O and above
+        createNotificationChannel()
+        
+        // Start service in foreground
+        startForeground(NOTIFICATION_ID, createNotification())
+        
         initializeWebRTC()
     }
 
@@ -147,19 +153,31 @@ class CameraStreamingService : Service(), SignalingClient.SignalingClientListene
      */
     fun startStreaming() {
         if (isStreaming) {
-            Log.d(TAG, "Already streaming, ignoring start request")
+            Log.d(TAG, "Streaming is already active")
             return
         }
         
         try {
-            Log.d(TAG, "Starting camera streaming")
+            // Initialize WebRTC components if not already initialized
+            if (peerConnectionFactory == null) {
+                initializeWebRTC()
+            }
             
             // Create video capturer
-            videoCapturer = createCameraCapturer()
-            if (videoCapturer == null) {
-                Log.e(TAG, "Failed to create camera capturer")
-                return
+            val cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val cameraEnumerator = Camera2Enumerator(this)
+            val deviceNames = cameraEnumerator.deviceNames
+            
+            if (deviceNames.isEmpty()) {
+                throw IllegalStateException("No camera available")
             }
+            
+            // Try to find back camera first
+            val cameraId = deviceNames.find { cameraEnumerator.isBackFacing(it) }
+                ?: deviceNames[0] // Fall back to first available camera
+            
+            videoCapturer = cameraEnumerator.createCapturer(cameraId, null)
+                ?: throw IllegalStateException("Failed to create video capturer")
             
             // Create surface texture helper for capturing video frames
             val surfaceTextureHelper = SurfaceTextureHelper.create(
@@ -423,34 +441,18 @@ class CameraStreamingService : Service(), SignalingClient.SignalingClientListene
      * Create notification for foreground service
      */
     private fun createNotification(): Notification {
-        // Create notification channel for Android O+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Camera Streaming",
-                NotificationManager.IMPORTANCE_LOW
+        val pendingIntent: PendingIntent = Intent(this, MainActivity::class.java).let { notificationIntent ->
+            PendingIntent.getActivity(
+                this, 0, notificationIntent,
+                PendingIntent.FLAG_IMMUTABLE
             )
-            channel.description = "Used for running camera streaming in background"
-            notificationManager.createNotificationChannel(channel)
         }
-        
-        // Create intent for notification tap
-        val intent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        // Build notification
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Camera Streaming")
-            .setContentText("Your device is streaming video")
+            .setContentText("Camera streaming is active")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
     
@@ -505,5 +507,20 @@ class CameraStreamingService : Service(), SignalingClient.SignalingClientListene
         override fun onSetSuccess() {}
         override fun onCreateFailure(error: String) {}
         override fun onSetFailure(error: String) {}
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Camera Streaming Service",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Ongoing notification for camera streaming service"
+            }
+            
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
     }
 } 
